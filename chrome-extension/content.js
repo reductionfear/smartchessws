@@ -566,10 +566,8 @@ function connectWebSocketEngine() {
     // Build WebSocket URL based on engine type and version
     let wsUrl = websocket_engine_url;
     
-    // Ensure base URL doesn't end with slash
-    if (wsUrl.endsWith('/')) {
-        wsUrl = wsUrl.slice(0, -1);
-    }
+    // Ensure base URL doesn't end with slashes
+    wsUrl = wsUrl.replace(/\/+$/, '');
     
     // Append engine path based on type
     if (websocket_engine_type === 'stockfish') {
