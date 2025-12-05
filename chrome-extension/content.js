@@ -553,23 +553,22 @@ function connectWebSocketEngine() {
     
     // Build WebSocket URL based on engine type and version
     let wsUrl = websocket_engine_url;
-    if (!wsUrl.endsWith('/')) {
-        wsUrl += '/';
+    
+    // Ensure base URL doesn't end with slash
+    if (wsUrl.endsWith('/')) {
+        wsUrl = wsUrl.slice(0, -1);
     }
     
     // Append engine path based on type
     if (websocket_engine_type === 'stockfish') {
-        wsUrl += `stockfish-${websocket_engine_version}`;
+        wsUrl += `/stockfish-${websocket_engine_version}`;
     } else if (websocket_engine_type === 'maia') {
-        wsUrl += `maia-${websocket_engine_version}`;
+        wsUrl += `/maia-${websocket_engine_version}`;
     } else if (websocket_engine_type === 'rodent3') {
-        wsUrl += `rodent3-${websocket_engine_version}`;
+        wsUrl += `/rodent3-${websocket_engine_version}`;
     } else if (websocket_engine_type === 'patricia') {
-        wsUrl += `patricia-${websocket_engine_version}`;
+        wsUrl += `/patricia-${websocket_engine_version}`;
     }
-    
-    // Remove trailing slash if URL construction added one
-    wsUrl = wsUrl.replace(/\/$/, '');
     
     Interface.log(`Connecting to WebSocket engine: ${wsUrl}`);
     
@@ -1636,6 +1635,18 @@ function reloadChessEngine(forced, callback) {
         if (engine) {
             engine.terminate();
             engine = null;  // Clear the reference to prevent stale state
+        }
+        
+        // Clean up WebSocket engine if switching away from it
+        if (websocketEngine && engineIndex !== websocket_engine_id) {
+            try {
+                websocketEngine.close();
+            } catch (e) {
+                // Ignore close errors
+            }
+            websocketEngine = null;
+            websocketEngineReady = false;
+            websocketPendingRequest = null;
         }
 
         loadChessEngine(callback);
