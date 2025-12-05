@@ -25,6 +25,9 @@ const dbValues = {
   use_book_moves: 'use_book_moves',
   node_engine_url: 'node_engine_url',
   node_engine_name: 'node_engine_name',
+  websocket_engine_url: 'websocket_engine_url',
+  websocket_engine_type: 'websocket_engine_type',
+  websocket_engine_version: 'websocket_engine_version',
   current_depth: 'current_depth',
   current_movetime: 'current_movetime',
   max_best_moves: 'max_best_moves',
@@ -48,6 +51,9 @@ const defaults = {
   use_book_moves: false,
   node_engine_url: 'http://localhost:5000',
   node_engine_name: 'stockfish-15',
+  websocket_engine_url: 'wss://ProtonnDev-engine.hf.space',
+  websocket_engine_type: 'stockfish',
+  websocket_engine_version: '16',
   current_depth: Math.round(MAX_DEPTH / 2),
   current_movetime: Math.round(MAX_MOVETIME / 3),
   max_best_moves: Math.floor(Math.round(MAX_DEPTH / 2) / 2),
@@ -122,25 +128,37 @@ function updateEngineModeDisplay() {
 function updateEngineSelectionDisplay() {
   const nodeEngineDiv = document.getElementById('node-engine-div');
   const lichessCloudInfo = document.getElementById('lichess-cloud-info');
+  const websocketEngineDiv = document.getElementById('websocket-engine-div');
   const reloadEngineDiv = document.getElementById('reload-engine-div');
   const maxMovesDiv = document.getElementById('max-moves-div');
   
   const node_engine_id = 3;
   const lichess_cloud_engine_id = 4;
+  const websocket_engine_id = 5;
   
   if (settings.engineIndex === node_engine_id) {
     nodeEngineDiv.style.display = 'block';
     lichessCloudInfo.style.display = 'none';
+    websocketEngineDiv.style.display = 'none';
     reloadEngineDiv.style.display = 'none';
     maxMovesDiv.style.display = 'none';
   } else if (settings.engineIndex === lichess_cloud_engine_id) {
     nodeEngineDiv.style.display = 'none';
     lichessCloudInfo.style.display = 'block';
+    websocketEngineDiv.style.display = 'none';
     reloadEngineDiv.style.display = 'none';
     maxMovesDiv.style.display = 'block';
+  } else if (settings.engineIndex === websocket_engine_id) {
+    nodeEngineDiv.style.display = 'none';
+    lichessCloudInfo.style.display = 'none';
+    websocketEngineDiv.style.display = 'block';
+    reloadEngineDiv.style.display = 'none';
+    maxMovesDiv.style.display = 'block';
+    updateWebSocketVersionConfig();
   } else {
     nodeEngineDiv.style.display = 'none';
     lichessCloudInfo.style.display = 'none';
+    websocketEngineDiv.style.display = 'none';
     reloadEngineDiv.style.display = 'block';
     maxMovesDiv.style.display = 'block';
   }
@@ -156,6 +174,114 @@ function updateReloadEngineDisplay() {
 function updateBulletSettingsDisplay() {
   const bulletSettings = document.getElementById('bullet-settings');
   bulletSettings.style.display = settings.bullet_mode ? 'block' : 'none';
+}
+
+// Update WebSocket version configuration based on engine type
+function updateWebSocketVersionConfig() {
+  const container = document.getElementById('ws-version-config');
+  const infoElem = document.getElementById('ws-engine-info');
+  container.innerHTML = '';
+  
+  const engineType = settings.websocket_engine_type;
+  const currentVersion = settings.websocket_engine_version;
+  
+  if (engineType === 'stockfish') {
+    // Available Stockfish versions on bettermint-sockets server (versions 4 and 15 not available)
+    container.innerHTML = `
+      <div class="form-group">
+        <label for="ws-engine-version">Stockfish Version:</label>
+        <select class="form-control" id="ws-engine-version">
+          <option value="1">Stockfish 1</option>
+          <option value="2">Stockfish 2</option>
+          <option value="3">Stockfish 3</option>
+          <option value="5">Stockfish 5</option>
+          <option value="6">Stockfish 6</option>
+          <option value="7">Stockfish 7</option>
+          <option value="8">Stockfish 8</option>
+          <option value="9">Stockfish 9</option>
+          <option value="10">Stockfish 10</option>
+          <option value="11">Stockfish 11</option>
+          <option value="12">Stockfish 12</option>
+          <option value="13">Stockfish 13</option>
+          <option value="14">Stockfish 14</option>
+          <option value="16">Stockfish 16</option>
+        </select>
+      </div>
+    `;
+    document.getElementById('ws-engine-version').value = currentVersion;
+    infoElem.textContent = 'Stockfish: World\'s strongest chess engine. Higher versions are stronger.';
+  } else if (engineType === 'maia') {
+    container.innerHTML = `
+      <div class="form-group">
+        <label for="ws-engine-version">Maia Elo Rating (1100-1900):</label>
+        <input type="number" class="form-control" id="ws-engine-version" 
+               min="1100" max="1900" step="100" value="${currentVersion}">
+      </div>
+    `;
+    infoElem.textContent = 'Maia: Neural network trained to play like humans at different skill levels. Recommended depth 5-6, max 7.';
+  } else if (engineType === 'rodent3') {
+    container.innerHTML = `
+      <div class="form-group">
+        <label for="ws-engine-version">Rodent III Personality:</label>
+        <select class="form-control" id="ws-engine-version">
+          <option value="anand">Anand</option>
+          <option value="anderssen">Anderssen</option>
+          <option value="botvinnik">Botvinnik</option>
+          <option value="fischer">Fischer</option>
+          <option value="larsen">Larsen</option>
+          <option value="marshall">Marshall</option>
+          <option value="nimzowitsch">Nimzowitsch</option>
+          <option value="petrosian">Petrosian</option>
+          <option value="reti">Reti</option>
+          <option value="rubinstein">Rubinstein</option>
+          <option value="spassky">Spassky</option>
+          <option value="steinitz">Steinitz</option>
+          <option value="tarrasch">Tarrasch</option>
+          <option value="drunk">Drunk</option>
+          <option value="henny">Henny</option>
+          <option value="kinghunter">King Hunter</option>
+          <option value="remy">Remy</option>
+          <option value="tortoise">Tortoise</option>
+        </select>
+      </div>
+    `;
+    document.getElementById('ws-engine-version').value = currentVersion;
+    infoElem.textContent = 'Rodent III: Engine with different playing personalities modeled after famous chess players and styles.';
+  } else if (engineType === 'patricia') {
+    container.innerHTML = `
+      <div class="form-group">
+        <label for="ws-engine-version">Patricia Elo Rating (1100-3200):</label>
+        <input type="number" class="form-control" id="ws-engine-version" 
+               min="1100" max="3200" step="50" value="${currentVersion}">
+      </div>
+    `;
+    infoElem.textContent = 'Patricia: Aggressive attacking engine with adjustable strength from beginner to super-GM level.';
+  }
+  
+  // Add event listener for version changes
+  const versionInput = document.getElementById('ws-engine-version');
+  if (versionInput) {
+    versionInput.addEventListener('change', async (e) => {
+      let value = e.target.value;
+      
+      // Validate numeric inputs
+      if (engineType === 'maia' || engineType === 'patricia') {
+        const numValue = parseInt(value);
+        if (isNaN(numValue)) {
+          // Default to middle of range if invalid
+          value = engineType === 'maia' ? '1500' : '2250';
+        } else {
+          const min = 1100;
+          const max = engineType === 'maia' ? 1900 : 3200;
+          value = Math.max(min, Math.min(max, numValue)).toString();
+        }
+        e.target.value = value;
+      }
+      
+      settings.websocket_engine_version = value;
+      await saveSetting('websocket_engine_version', value);
+    });
+  }
 }
 
 // Update night mode
@@ -251,6 +377,10 @@ async function applySettingsToUI() {
   // Node engine settings
   document.getElementById('engine-url').value = settings.node_engine_url;
   document.getElementById('engine-name').value = settings.node_engine_name;
+  
+  // WebSocket engine settings
+  document.getElementById('ws-base-url').value = settings.websocket_engine_url || 'wss://ProtonnDev-engine.hf.space';
+  document.getElementById('ws-engine-type').value = settings.websocket_engine_type || 'stockfish';
   
   // Checkboxes
   document.getElementById('use-book-moves').checked = settings.use_book_moves;
@@ -408,6 +538,26 @@ function initEventListeners() {
   
   document.getElementById('engine-name').addEventListener('change', async (e) => {
     await saveSetting('node_engine_name', e.target.value);
+  });
+  
+  // WebSocket engine settings
+  document.getElementById('ws-base-url').addEventListener('change', async (e) => {
+    await saveSetting('websocket_engine_url', e.target.value);
+  });
+  
+  document.getElementById('ws-engine-type').addEventListener('change', async (e) => {
+    settings.websocket_engine_type = e.target.value;
+    await saveSetting('websocket_engine_type', e.target.value);
+    
+    // Set default version based on type
+    let defaultVersion = '16';
+    if (e.target.value === 'maia') defaultVersion = '1500';
+    else if (e.target.value === 'rodent3') defaultVersion = 'anand';
+    else if (e.target.value === 'patricia') defaultVersion = '2250';
+    
+    settings.websocket_engine_version = defaultVersion;
+    await saveSetting('websocket_engine_version', defaultVersion);
+    updateWebSocketVersionConfig();
   });
   
   // Bullet mode

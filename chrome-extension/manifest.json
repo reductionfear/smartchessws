@@ -11,7 +11,8 @@
   "host_permissions": [
     "https://www.chess.com/*",
     "https://lichess.org/*",
-    "http://localhost:*/*"
+    "http://localhost:*/*",
+    "wss://ProtonnDev-engine.hf.space/*"
   ],
   "content_scripts": [
     {

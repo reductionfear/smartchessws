@@ -34,6 +34,7 @@
             <option value="2">Stockfish 2018</option>
             <option value="3">Node Server Engines</option>
             <option value="4">Lichess Cloud (Lichess.org only)</option>
+            <option value="5">Remote WebSocket Engine</option>
           </select>
         </div>
 
@@ -69,6 +70,29 @@
 
         <div id="lichess-cloud-info" style="display: none;">
           <p class="info-text">Lichess Cloud uses Lichess.org's cloud analysis API. Analysis depth depends on the position's popularity in the database.</p>
+        </div>
+
+        <div id="websocket-engine-div" style="display: none;">
+          <div class="form-group">
+            <label for="ws-base-url">WebSocket Base URL:</label>
+            <input type="text" class="form-control" id="ws-base-url" value="wss://ProtonnDev-engine.hf.space">
+          </div>
+          <div class="space"></div>
+          <div class="form-group">
+            <label for="ws-engine-type">Engine Type:</label>
+            <select class="form-control" id="ws-engine-type">
+              <option value="stockfish">Stockfish</option>
+              <option value="maia">Maia Bot (Human-like)</option>
+              <option value="rodent3">Rodent III (Personalities)</option>
+              <option value="patricia">Patricia (Aggressive)</option>
+            </select>
+          </div>
+          <div class="space"></div>
+          <div id="ws-version-config">
+            <!-- Dynamic configuration based on engine type -->
+          </div>
+          <div class="space"></div>
+          <p class="info-text" id="ws-engine-info"></p>
         </div>
       </div>
     </div>
