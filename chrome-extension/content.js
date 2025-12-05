@@ -213,12 +213,24 @@ function updateSettingFromPopup(key, value) {
             break;
         case 'websocket_engine_url':
             websocket_engine_url = value;
+            // Reconnect if currently using WebSocket engine
+            if (engineIndex === websocket_engine_id) {
+                connectWebSocketEngine();
+            }
             break;
         case 'websocket_engine_type':
             websocket_engine_type = value;
+            // Reconnect if currently using WebSocket engine
+            if (engineIndex === websocket_engine_id) {
+                connectWebSocketEngine();
+            }
             break;
         case 'websocket_engine_version':
             websocket_engine_version = value;
+            // Reconnect if currently using WebSocket engine
+            if (engineIndex === websocket_engine_id) {
+                connectWebSocketEngine();
+            }
             break;
     }
 }
