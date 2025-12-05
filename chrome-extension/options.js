@@ -186,6 +186,7 @@ function updateWebSocketVersionConfig() {
   const currentVersion = settings.websocket_engine_version;
   
   if (engineType === 'stockfish') {
+    // Available Stockfish versions on bettermint-sockets server (versions 4 and 15 not available)
     container.innerHTML = `
       <div class="form-group">
         <label for="ws-engine-version">Stockfish Version:</label>
@@ -266,9 +267,14 @@ function updateWebSocketVersionConfig() {
       // Validate numeric inputs
       if (engineType === 'maia' || engineType === 'patricia') {
         const numValue = parseInt(value);
-        const min = engineType === 'maia' ? 1100 : 1100;
-        const max = engineType === 'maia' ? 1900 : 3200;
-        value = Math.max(min, Math.min(max, numValue)).toString();
+        if (isNaN(numValue)) {
+          // Default to middle of range if invalid
+          value = engineType === 'maia' ? '1500' : '2250';
+        } else {
+          const min = 1100;
+          const max = engineType === 'maia' ? 1900 : 3200;
+          value = Math.max(min, Math.min(max, numValue)).toString();
+        }
         e.target.value = value;
       }
       

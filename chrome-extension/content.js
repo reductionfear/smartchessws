@@ -706,15 +706,15 @@ function handleWebSocketBestMove(data, request) {
     Interface.updateBestMoveProgress(`WS Depth: ${depth}`);
     Interface.engineLog(`bestmove ${move} (WebSocket, depth ${depth}, score ${score})`);
     
-    // Parse possible moves from pv lines
+    // Parse possible moves from pv lines (multipv 2, 3, 4, ... are alternative moves)
     possible_moves = [];
     const pvMatches = websocketResponseBuffer.matchAll(/multipv\s+(\d+).*?pv\s+([a-h][1-8][a-h][1-8][qrbn]?)/g);
-    let pvIndex = 0;
     for (const match of pvMatches) {
-        if (pvIndex > 0 && pvIndex <= max_best_moves) {
+        const multiPvNum = parseInt(match[1]);
+        // Skip multipv 1 (that's the best move), include 2 onwards up to max_best_moves+1
+        if (multiPvNum > 1 && multiPvNum <= max_best_moves + 1) {
             possible_moves.push(match[2]);
         }
-        pvIndex++;
     }
     
     websocketResponseBuffer = "";

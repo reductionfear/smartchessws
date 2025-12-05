@@ -115,6 +115,7 @@ function updateWebSocketVersionSelector(engineType, currentVersion) {
     label.innerHTML = 'Version: ';
     const select = document.createElement('select');
     select.id = 'ws-engine-version';
+    // Available Stockfish versions on bettermint-sockets server (4 and 15 not available)
     const versions = ['1', '2', '3', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '16'];
     versions.forEach(v => {
       const option = document.createElement('option');
@@ -141,7 +142,8 @@ function updateWebSocketVersionSelector(engineType, currentVersion) {
     label.appendChild(input);
     
     input.addEventListener('change', async (e) => {
-      let value = Math.max(1100, Math.min(1900, parseInt(e.target.value)));
+      const numValue = parseInt(e.target.value);
+      let value = isNaN(numValue) ? 1500 : Math.max(1100, Math.min(1900, numValue));
       e.target.value = value;
       await chrome.storage.local.set({ websocket_engine_version: value.toString() });
       sendMessageToContentScript({ action: 'updateSetting', key: 'websocket_engine_version', value: value.toString() });
@@ -178,7 +180,8 @@ function updateWebSocketVersionSelector(engineType, currentVersion) {
     label.appendChild(input);
     
     input.addEventListener('change', async (e) => {
-      let value = Math.max(1100, Math.min(3200, parseInt(e.target.value)));
+      const numValue = parseInt(e.target.value);
+      let value = isNaN(numValue) ? 2250 : Math.max(1100, Math.min(3200, numValue));
       e.target.value = value;
       await chrome.storage.local.set({ websocket_engine_version: value.toString() });
       sendMessageToContentScript({ action: 'updateSetting', key: 'websocket_engine_version', value: value.toString() });
