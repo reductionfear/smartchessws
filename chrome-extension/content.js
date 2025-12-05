@@ -50,6 +50,9 @@ var show_opposite_moves = false;
 var use_book_moves = false;
 var node_engine_url = "http://localhost:5000";
 var node_engine_name = "stockfish-15"; // Platform-agnostic engine name (no .exe extension)
+var websocket_engine_url = "wss://ProtonnDev-engine.hf.space";
+var websocket_engine_type = "stockfish"; // stockfish, maia, rodent3, patricia
+var websocket_engine_version = "16"; // version/elo/personality based on type
 var current_depth = Math.round(MAX_DEPTH / 2);
 var current_movetime = Math.round(MAX_MOVETIME / 3);
 var max_best_moves = Math.floor(current_depth / 2);
@@ -60,6 +63,12 @@ var bullet_depth = 4;
 var bullet_movetime = 100;
 
 var lastBestMoveID = 0;
+
+// WebSocket engine state
+var websocketEngine = null;
+var websocketEngineReady = false;
+var websocketPendingRequest = null;
+var websocketResponseBuffer = "";
 
 
 
@@ -76,6 +85,9 @@ const dbValues = {
     use_book_moves: "use_book_moves",
     node_engine_url: "node_engine_url",
     node_engine_name: "node_engine_name",
+    websocket_engine_url: "websocket_engine_url",
+    websocket_engine_type: "websocket_engine_type",
+    websocket_engine_version: "websocket_engine_version",
     current_depth: "current_depth",
     current_movetime: "current_movetime",
     max_best_moves: "max_best_moves",
@@ -91,6 +103,7 @@ var closedGui = false;
 var reload_count = 1;
 var node_engine_id = 3;
 var lichess_cloud_engine_id = 4;
+var websocket_engine_id = 5;
 var Interface = null;
 var LozzaUtils = null;
 var CURRENT_SITE = null;
@@ -197,6 +210,15 @@ function updateSettingFromPopup(key, value) {
             break;
         case 'node_engine_name':
             node_engine_name = value;
+            break;
+        case 'websocket_engine_url':
+            websocket_engine_url = value;
+            break;
+        case 'websocket_engine_type':
+            websocket_engine_type = value;
+            break;
+        case 'websocket_engine_version':
+            websocket_engine_version = value;
             break;
     }
 }
@@ -514,6 +536,223 @@ function getNodeBestMoves(request) {
         forcedBestMove = false;
         Interface.log("make sure node server is running !!");
     });
+}
+
+function connectWebSocketEngine() {
+    if (websocketEngine) {
+        try {
+            websocketEngine.close();
+        } catch (e) {
+            // Ignore close errors
+        }
+        websocketEngine = null;
+    }
+    
+    websocketEngineReady = false;
+    websocketResponseBuffer = "";
+    
+    // Build WebSocket URL based on engine type and version
+    let wsUrl = websocket_engine_url;
+    if (!wsUrl.endsWith('/')) {
+        wsUrl += '/';
+    }
+    
+    // Append engine path based on type
+    if (websocket_engine_type === 'stockfish') {
+        wsUrl += `stockfish-${websocket_engine_version}`;
+    } else if (websocket_engine_type === 'maia') {
+        wsUrl += `maia-${websocket_engine_version}`;
+    } else if (websocket_engine_type === 'rodent3') {
+        wsUrl += `rodent3-${websocket_engine_version}`;
+    } else if (websocket_engine_type === 'patricia') {
+        wsUrl += `patricia-${websocket_engine_version}`;
+    }
+    
+    // Remove trailing slash if URL construction added one
+    wsUrl = wsUrl.replace(/\/$/, '');
+    
+    Interface.log(`Connecting to WebSocket engine: ${wsUrl}`);
+    
+    try {
+        websocketEngine = new WebSocket(wsUrl);
+        
+        websocketEngine.onopen = () => {
+            Interface.log('WebSocket engine connected');
+            // Initialize UCI protocol
+            websocketEngine.send('uci');
+            websocketEngine.send('isready');
+        };
+        
+        websocketEngine.onmessage = (event) => {
+            const data = event.data;
+            Interface.engineLog(data);
+            
+            websocketResponseBuffer += data + '\n';
+            
+            // Check for readyok - engine is ready for commands
+            if (data.includes('readyok')) {
+                websocketEngineReady = true;
+                Interface.log('WebSocket engine ready');
+                
+                // Process pending request if any
+                if (websocketPendingRequest) {
+                    const request = websocketPendingRequest;
+                    websocketPendingRequest = null;
+                    getWebSocketBestMoves(request);
+                }
+            }
+            
+            // Check for bestmove response
+            if (data.includes('bestmove') && websocketPendingRequest) {
+                handleWebSocketBestMove(data, websocketPendingRequest);
+                websocketPendingRequest = null;
+            }
+        };
+        
+        websocketEngine.onerror = (error) => {
+            Interface.log('WebSocket error - check connection and URL');
+            console.error('WebSocket error:', error);
+            websocketEngineReady = false;
+        };
+        
+        websocketEngine.onclose = () => {
+            Interface.log('WebSocket engine disconnected');
+            websocketEngineReady = false;
+            
+            // Auto-reconnect after 2 seconds if engine index is still WebSocket
+            if (engineIndex === websocket_engine_id) {
+                setTimeout(() => {
+                    if (engineIndex === websocket_engine_id) {
+                        Interface.log('Attempting to reconnect WebSocket engine...');
+                        connectWebSocketEngine();
+                    }
+                }, 2000);
+            }
+        };
+    } catch (error) {
+        Interface.log('Failed to create WebSocket connection');
+        console.error('WebSocket connection error:', error);
+    }
+}
+
+function handleWebSocketBestMove(data, request) {
+    const FenUtil = new FenUtils();
+    const currentFen = FenUtil.getFen();
+    if (currentFen !== request.fen) {
+        Interface.log('Position changed, discarding WebSocket analysis');
+        websocketResponseBuffer = "";
+        return;
+    }
+    
+    if (lastBestMoveID !== request.id) {
+        Interface.log('Ignoring stale WebSocket response');
+        websocketResponseBuffer = "";
+        return;
+    }
+    
+    // Parse bestmove from UCI output
+    const bestmoveMatch = data.match(/bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
+    if (!bestmoveMatch) {
+        Interface.log('Invalid bestmove response from WebSocket engine');
+        websocketResponseBuffer = "";
+        return;
+    }
+    
+    const move = bestmoveMatch[1];
+    
+    // Parse depth and score from info lines in buffer
+    let depth = current_depth;
+    let score = 0;
+    
+    const infoLines = websocketResponseBuffer.split('\n').filter(line => line.includes('info'));
+    if (infoLines.length > 0) {
+        // Get the last info line with depth
+        for (let i = infoLines.length - 1; i >= 0; i--) {
+            const line = infoLines[i];
+            const depthMatch = line.match(/depth\s+(\d+)/);
+            if (depthMatch) {
+                depth = parseInt(depthMatch[1]);
+            }
+            
+            // Try to get score cp (centipawns)
+            const cpMatch = line.match(/score\s+cp\s+(-?\d+)/);
+            if (cpMatch) {
+                score = parseInt(cpMatch[1]);
+                break;
+            }
+            
+            // Check for mate score
+            const mateMatch = line.match(/score\s+mate\s+(-?\d+)/);
+            if (mateMatch) {
+                const mateIn = parseInt(mateMatch[1]);
+                score = mateIn > 0 ? MATE_SCORE : -MATE_SCORE;
+                break;
+            }
+        }
+    }
+    
+    Interface.log(`WebSocket analysis complete: depth ${depth}, move ${move}, score ${score}`);
+    Interface.updateBestMoveProgress(`WS Depth: ${depth}`);
+    Interface.engineLog(`bestmove ${move} (WebSocket, depth ${depth}, score ${score})`);
+    
+    // Parse possible moves from pv lines
+    possible_moves = [];
+    const pvMatches = websocketResponseBuffer.matchAll(/multipv\s+(\d+).*?pv\s+([a-h][1-8][a-h][1-8][qrbn]?)/g);
+    let pvIndex = 0;
+    for (const match of pvMatches) {
+        if (pvIndex > 0 && pvIndex <= max_best_moves) {
+            possible_moves.push(match[2]);
+        }
+        pvIndex++;
+    }
+    
+    websocketResponseBuffer = "";
+    moveResult(move.slice(0, 2), move.slice(2, 4), depth, true, depth);
+}
+
+function getWebSocketBestMoves(request) {
+    if (!websocketEngine || websocketEngine.readyState !== WebSocket.OPEN) {
+        Interface.log('WebSocket engine not connected, attempting to connect...');
+        websocketPendingRequest = request;
+        connectWebSocketEngine();
+        return;
+    }
+    
+    if (!websocketEngineReady) {
+        Interface.log('WebSocket engine not ready, waiting...');
+        websocketPendingRequest = request;
+        return;
+    }
+    
+    const effectiveDepth = bullet_mode ? Math.min(current_depth, bullet_depth) : current_depth;
+    const effectiveMovetime = bullet_mode ? bullet_movetime : current_movetime;
+    
+    Interface.log(`Using WebSocket engine (depth: ${effectiveDepth}, movetime: ${effectiveMovetime})...`);
+    
+    websocketResponseBuffer = "";
+    websocketPendingRequest = request;
+    
+    // Send UCI commands
+    try {
+        websocketEngine.send('ucinewgame');
+        websocketEngine.send(`position fen ${request.fen}`);
+        
+        // Set MultiPV if supported (for alternative moves)
+        const multiPv = Math.min(max_best_moves + 1, 5);
+        websocketEngine.send(`setoption name MultiPV value ${multiPv}`);
+        
+        if (bullet_mode) {
+            websocketEngine.send(`go movetime ${effectiveMovetime}`);
+        } else if (engineMode === DEPTH_MODE) {
+            websocketEngine.send(`go depth ${effectiveDepth}`);
+        } else {
+            websocketEngine.send(`go movetime ${effectiveMovetime}`);
+        }
+    } catch (error) {
+        Interface.log('Error sending commands to WebSocket engine');
+        console.error('WebSocket send error:', error);
+        websocketPendingRequest = null;
+    }
 }
 
 function getElo() {
@@ -1208,6 +1447,11 @@ async function getBestMoves(request) {
         return;
     }
 
+    if (engineIndex === websocket_engine_id) {
+        getWebSocketBestMoves(request);
+        return;
+    }
+
     if (WEB_ENGINE_IDS.includes(engineIndex)) {
         // Wait for engine to load with timeout
         const MAX_WAIT_TIME = 5000; // 5 seconds max
@@ -1382,7 +1626,7 @@ function changeEnginePower(val) {
 
 
 function reloadChessEngine(forced, callback) {
-    if ((node_engine_id == engineIndex || lichess_cloud_engine_id == engineIndex) && forced == false) {
+    if ((node_engine_id == engineIndex || lichess_cloud_engine_id == engineIndex || websocket_engine_id == engineIndex) && forced == false) {
         callback();
     }
     else if (reload_engine == true && reload_count >= reload_every || forced == true) {
@@ -1557,6 +1801,12 @@ async function loadChessEngine(callback) {
         return callback();
     }
 
+    if (engineIndex == websocket_engine_id) {
+        Interface.log('Initializing WebSocket engine...');
+        connectWebSocketEngine();
+        return callback();
+    }
+
     if (!engineObjectURL) {
         try {
             let engineName;
@@ -1642,6 +1892,9 @@ async function initializeDatabase(callback) {
         await Storage.set(dbValues.use_book_moves, use_book_moves);
         await Storage.set(dbValues.node_engine_url, node_engine_url);
         await Storage.set(dbValues.node_engine_name, node_engine_name);
+        await Storage.set(dbValues.websocket_engine_url, websocket_engine_url);
+        await Storage.set(dbValues.websocket_engine_type, websocket_engine_type);
+        await Storage.set(dbValues.websocket_engine_version, websocket_engine_version);
         await Storage.set(dbValues.current_depth, current_depth);
         await Storage.set(dbValues.current_movetime, current_movetime);
         await Storage.set(dbValues.max_best_moves, max_best_moves);
@@ -1668,6 +1921,16 @@ async function initializeDatabase(callback) {
         use_book_moves = await Storage.get(dbValues.use_book_moves);
         node_engine_url = await Storage.get(dbValues.node_engine_url);
         node_engine_name = await Storage.get(dbValues.node_engine_name);
+        
+        // Load WebSocket settings with defaults
+        const storedWsUrl = await Storage.get(dbValues.websocket_engine_url);
+        const storedWsType = await Storage.get(dbValues.websocket_engine_type);
+        const storedWsVersion = await Storage.get(dbValues.websocket_engine_version);
+        
+        websocket_engine_url = storedWsUrl !== undefined ? storedWsUrl : websocket_engine_url;
+        websocket_engine_type = storedWsType !== undefined ? storedWsType : websocket_engine_type;
+        websocket_engine_version = storedWsVersion !== undefined ? storedWsVersion : websocket_engine_version;
+        
         current_depth = await Storage.get(dbValues.current_depth);
         current_movetime = await Storage.get(dbValues.current_movetime);
         max_best_moves = await Storage.get(dbValues.max_best_moves);

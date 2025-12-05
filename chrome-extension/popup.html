@@ -26,6 +26,8 @@
         <option value="1">Stockfish 5</option>
         <option value="2">Stockfish 2018</option>
         <option value="3">Node Server</option>
+        <option value="4">Lichess Cloud (Lichess only)</option>
+        <option value="5">Remote WebSocket</option>
       </select>
     </div>
     
@@ -36,6 +38,20 @@
       <label>Engine Name:
         <input type="text" id="node-engine" value="stockfish.exe">
       </label>
+    </div>
+    
+    <div class="section" id="websocket-settings" style="display:none;">
+      <label>Engine Type:
+        <select id="ws-engine-type">
+          <option value="stockfish">Stockfish</option>
+          <option value="maia">Maia Bot</option>
+          <option value="rodent3">Rodent III</option>
+          <option value="patricia">Patricia</option>
+        </select>
+      </label>
+      <div id="ws-version-container">
+        <!-- Dynamic version/elo/personality selector will be shown here -->
+      </div>
     </div>
     
     <button id="open-gui">Open Full Settings</button>
